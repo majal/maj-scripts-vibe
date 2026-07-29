@@ -25,6 +25,17 @@ JWVIDEOMUX="/Users/maj/dig/maj-scripts-vibe/jwvideo-mux"
 JWVM_DEFAULT_LANGS="E,TG,CV,HV,SA"
 JWVM_LANG_DIR_NAMES="E TG HV CV SA F S"  # never treated as a library folder by jwvm-relang's glob
 
+# Human-audited ground truth for the whole SCE Media corpus (built 2026-07-28, see the file's own
+# header). This is the authoritative correction layer -- e.g. it's the only thing that tells
+# jwvideo-mux "iut_E_r720P (Integrity Under Trial)"'s HV/TG really do differ (a name plate/title
+# card) even though the automatic detector alone reports them merely `review_recommended`, or that
+# "mwbv_E_201708_04..." is `whole_video_same` despite an encoding-only SSIM dip. Applied
+# automatically below whenever the file exists so a plain jwvm-build can't accidentally skip it
+# (a real mistake made once already: an early manual rebuild without this flag mis-classified a
+# confirmed real difference as "nothing to adapt"). Falls back to no override silently if this path
+# doesn't exist (e.g. these shortcuts sourced somewhere outside this corpus).
+JWVM_GROUND_TRUTH="/Users/maj/Theoskratos/Field Instructor/SCE Instructor/SCE Media/_localization-audit/ground-truth.toml"
+
 _jwvm_check_cwd() {
     if [[ ! -f "$1" ]]; then
         echo "jwvm: '$1' not found in $(pwd) -- run this from inside the base-language folder (e.g. E/)." >&2
@@ -32,27 +43,41 @@ _jwvm_check_cwd() {
     fi
 }
 
+# Populates the caller's own "overrides" array (bash has no return-an-array, so this takes the
+# array's NAME and fills it via nameref) -- needed because JWVM_GROUND_TRUTH's path has spaces in
+# it, and passing that around as a plain string would break under word-splitting.
+_jwvm_overrides_into() {
+    local -n _out="$1"
+    _out=()
+    [[ -f "$JWVM_GROUND_TRUTH" ]] && _out=(--manual-overrides "$JWVM_GROUND_TRUTH")
+}
+
 # Read-only: report exact-reuse and localized-difference candidates. Never writes or deletes
 # anything. Run this FIRST on a new video to see what --adaptive-mpv-library would do.
 jwvm-plan() {
     local video="$1" langs="${2:-$JWVM_DEFAULT_LANGS}"
     _jwvm_check_cwd "$video" || return 1
-    "$JWVIDEOMUX" "$video" -v "$langs" -o .. --analyze-video-variants
+    local overrides=(); _jwvm_overrides_into overrides
+    "$JWVIDEOMUX" "$video" -v "$langs" -o .. --analyze-video-variants "${overrides[@]}"
 }
 
 # Build (or rebuild) the adaptive mpv library: shared common video + per-language localized
 # segments/audio/subs/EDL/manifest + "Play <Language> - <title>.command" launchers at the unit
 # root. If the video turns out to have no real per-language differences, jwvideo-mux itself falls
 # back to one ordinary shared-video MKV written straight into the unit root -- no folder, no EDL.
+# Automatically applies the corpus ground-truth file (see JWVM_GROUND_TRUTH above) when present.
 # NOTE: this does not clear a pre-existing library folder first -- if segment boundaries shift
 # (e.g. after adding/removing a language) stale files can be left behind. Use jwvm-relang below
 # when you're changing the language set on a library you've already built once.
 # Pass extra_flags for e.g. --normalize-mismatched-aspect (crop/re-encode a mismatched-resolution
 # language's short localized clips to match the reference instead of letting mpv resize mid-play).
+# extra_flags is split on whitespace, so it must not itself contain a space-bearing value (use
+# jwvideo-mux directly for that, as with a custom --manual-overrides path).
 jwvm-build() {
     local video="$1" langs="${2:-$JWVM_DEFAULT_LANGS}" extra_flags="$3"
     _jwvm_check_cwd "$video" || return 1
-    "$JWVIDEOMUX" "$video" -v "$langs" -o .. --adaptive-mpv-library --force $extra_flags
+    local overrides=(); _jwvm_overrides_into overrides
+    "$JWVIDEOMUX" "$video" -v "$langs" -o .. --adaptive-mpv-library --force "${overrides[@]}" $extra_flags
 }
 
 # Classic single-file mux: one MKV with every requested language as a selectable audio/subtitle
