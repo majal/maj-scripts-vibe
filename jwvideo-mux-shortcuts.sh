@@ -4,7 +4,7 @@
 # Short commands for the jwvideo-mux workflows used most often against SCE-layout local
 # video libraries. Source this from your shell rc:
 #
-#   source /Users/maj/dig/maj-scripts-vibe/jwvideo-mux-shortcuts.sh
+#   source ~/dig/maj-scripts-vibe/jwvideo-mux-shortcuts.sh
 #
 # Layout these assume (matches "SCE Instructor/SCE Media/<unit>/"):
 #
@@ -21,7 +21,7 @@
 # the video filename (not full path) as its first argument. langs defaults to E,TG,CV,HV,SA --
 # pass a second argument to override (e.g. "E,TG,HV" if this unit has no CV/SA source).
 
-JWVIDEOMUX="/Users/maj/dig/maj-scripts-vibe/jwvideo-mux"
+JWVIDEOMUX="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/jwvideo-mux"
 JWVM_DEFAULT_LANGS="E,TG,CV,HV,SA"
 JWVM_LANG_DIR_NAMES="E TG HV CV SA F S"  # never treated as a library folder by jwvm-relang's glob
 
